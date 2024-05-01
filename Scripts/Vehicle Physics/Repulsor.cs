@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Mathematics;
 
+
 public class Repulsor : MonoBehaviour
 {
     float velocity = 0f;
@@ -20,24 +21,39 @@ public class Repulsor : MonoBehaviour
     [SerializeField] private float magneticMass = 1f;
     //[SerializeField] private float magneticFrictionFactor = 0.5f;
     [SerializeField] private AnimationCurve frictionLookupCurve;
+    [SerializeField] private float friction = 0.5f;
 
-    [SerializeField] private float steerLimit = 0.5f;
+    [Header("Rolling Friction Settings")]
+    [SerializeField] private AnimationCurve rollingFriction;
+    [SerializeField] private float rollingFrictionFactor = 2f;
+
+    [Header("Steering Settings")]
+
+    [SerializeField] private AnimationCurve steeringCurve;
+    [SerializeField] private float steerLimit = 45;
+    [SerializeField] private float steerSpeed = 100f;
 
     [Header("Thruster Settings")]
     [SerializeField] private AnimationCurve thrusterCurve;
     [SerializeField] private float maxSpeed = 1000f;
     [SerializeField] private float thrusterStrength = 100f;
 
+    [Header("BrakeSettings")]
+    [SerializeField] private float brakeStrength = 100f;
+    [SerializeField] private AnimationCurve brakeCurve;
+
     [Header("Drivetrain Settings")]
     [SerializeField] private bool isThruster = false;
     [SerializeField] private bool isSteerable = false;
+    [SerializeField] private bool isBrake = false;
 
     [Header ("Debug")]
     [SerializeField] private bool ControlDebug = false;
     [SerializeField] private bool ThrusterDebug = false;
     private float steer = 0f;
     private float pedal = 0f;
-
+    private float brake = 0f;
+    private float steeringAngle = 0f;
     private bool isGrounded = false;
     // Start is called before the first frame update
     void Start()
@@ -52,36 +68,39 @@ public class Repulsor : MonoBehaviour
         drive.Drive.Accelerate.performed += ctx => Thrust(ctx.ReadValue<float>());
         drive.Drive.Accelerate.canceled += ctx => Thrust(0f);
         drive.Drive.Steer.performed += ctx => Steer(ctx.ReadValue<Vector2>());
-       // drive.Drive.Steer.canceled += ctx => Steer(Vector2.zero);
+        drive.Drive.Steer.canceled += ctx => Steer(Vector2.zero);
+        drive.Drive.Brake.performed += ctx => Brake(ctx.ReadValue<float>());
+        drive.Drive.Brake.canceled += ctx => Brake(0f);
     }
 
     // Update is called once per frame
-    void Update()
+    void FixedUpdate()
     {
-  if (isSteerable && steer != 0f)
+        
+              Vector3 worldVelocity = parentRigidbody.GetPointVelocity(transform.position);
+        float normalizedVelocity = Vector3.Dot(worldVelocity, transform.forward)/maxSpeed ;
+
+        if(isSteerable)
         {
-               //slerp
-               float targetSteer = steer * steerLimit;
-               
+        //Debug.Log("Normalized Velocity: " + normalizedVelocity);
+            float maxSteerFactor = steeringCurve.Evaluate(normalizedVelocity);
+        
+            float targetSteer = steer * steerLimit * maxSteerFactor;
 
-               float targetSteerChange = Mathf.Clamp(targetSteer, -steerLimit, steerLimit);
-
-               Quaternion target = Quaternion.Euler(transform.up * targetSteerChange);
-
-               transform.localRotation = Quaternion.Lerp(transform.localRotation, target, Time.deltaTime);
-               
-               //clamp local rotation to max steer
-
+            steeringAngle = Mathf.MoveTowardsAngle(steeringAngle, targetSteer, steerSpeed * Time.fixedDeltaTime);
         }
+ 
+        transform.localRotation = Quaternion.Euler(0, steeringAngle, 0);
 
         parentRigidbody.AddForceAtPosition(transform.up * calculateRepulsion(), transform.position, ForceMode.Force);
         
         if(isGrounded){
-        parentRigidbody.AddForceAtPosition(calculateMagneticFriction(), transform.position, ForceMode.Force);
-       
-      
+        parentRigidbody.AddForceAtPosition(calculateMagneticFriction(), transform.position);
+        //constantly add rolling friction
 
-
+        
+        parentRigidbody.AddForceAtPosition(-transform.forward * rollingFriction.Evaluate(normalizedVelocity) * rollingFrictionFactor, transform.position);
+        }
          if(isThruster && pedal > 0f)
        {
         float currentSpeed = Vector3.Dot( transform.forward, parentRigidbody.velocity);
@@ -98,9 +117,16 @@ public class Repulsor : MonoBehaviour
 
         parentRigidbody.AddForceAtPosition(transform.forward * target, transform.position, ForceMode.Force);
        }
+
+         if(isBrake && brake > 0f)
+         {
+                
+                float target = brakeCurve.Evaluate(normalizedVelocity) * brakeStrength;
+                parentRigidbody.AddForceAtPosition(-transform.forward * target, transform.position, ForceMode.Force);
+            }
         }
     
-    }
+    
 
 
     public float calculateRepulsion()
@@ -130,8 +156,8 @@ public class Repulsor : MonoBehaviour
         Vector3 worldVelocity = parentRigidbody.GetPointVelocity(transform.position);
 
         float steerVelocity = Vector3.Dot(transform.right, worldVelocity);
-        float magneticFrictionFactor = frictionLookupCurve.Evaluate(steerVelocity);
-        float targetSteerChange = -steerVelocity * magneticFrictionFactor;
+        float magneticFrictionFactor = frictionLookupCurve.Evaluate(Mathf.Abs(steerVelocity));
+        float targetSteerChange = -steerVelocity * friction;
         float targetAcceleration = targetSteerChange / Time.fixedDeltaTime;
 
       return transform.right * magneticMass * targetAcceleration;
@@ -160,6 +186,23 @@ public class Repulsor : MonoBehaviour
         if(isSteerable)
         {
         steer = wheel.x;
+        }
+
+       
+
+        
+
+    }
+
+    public void Brake(float input)
+    {
+        if(ControlDebug)
+        {
+            Debug.Log("Brake");
+        }
+        if(isBrake)
+        {
+            brake = input;
         }
     }
 
