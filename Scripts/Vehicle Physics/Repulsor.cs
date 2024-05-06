@@ -86,15 +86,22 @@ public class Repulsor : MonoBehaviour
             float maxSteerFactor = steeringCurve.Evaluate(normalizedVelocity);
         
             float targetSteer = steer * steerLimit * maxSteerFactor;
-
-            steeringAngle = Mathf.MoveTowardsAngle(steeringAngle, targetSteer, steerSpeed * Time.fixedDeltaTime);
+            float updateSpeed = steerSpeed * Time.fixedDeltaTime;
+            if(steer == 0f)
+            {
+                updateSpeed = (steerSpeed/1.5f) * Time.fixedDeltaTime;
+            }
+            steeringAngle = Mathf.MoveTowardsAngle(steeringAngle, targetSteer, updateSpeed);
+        
+            //math.clamp(steeringAngle, -steerLimit, steerLimit);
         }
- 
         transform.localRotation = Quaternion.Euler(0, steeringAngle, 0);
+ 
 
         parentRigidbody.AddForceAtPosition(transform.up * calculateRepulsion(), transform.position, ForceMode.Force);
         
         if(isGrounded){
+       // Debug.Log(calculateMagneticFriction());
         parentRigidbody.AddForceAtPosition(calculateMagneticFriction(), transform.position);
         //constantly add rolling friction
 
@@ -153,13 +160,15 @@ public class Repulsor : MonoBehaviour
     public Vector3 calculateMagneticFriction()
     {
         //steering
-        Vector3 worldVelocity = parentRigidbody.GetPointVelocity(transform.position);
+       Vector3 worldVelocity = parentRigidbody.GetPointVelocity(this.transform.position);
 
-        float steerVelocity = Vector3.Dot(transform.right, worldVelocity);
-        float magneticFrictionFactor = frictionLookupCurve.Evaluate(Mathf.Abs(steerVelocity));
+        float steerVelocity = Vector3.Dot(this.transform.right, worldVelocity);
+        //Debug.Log("Steer Velocity: " + steerVelocity/40);
+        float magneticFrictionFactor = frictionLookupCurve.Evaluate(math.abs(steerVelocity)/40);
+        Debug.Log("Magnetic Friction Factor: " + magneticFrictionFactor);
         float targetSteerChange = -steerVelocity * friction;
         float targetAcceleration = targetSteerChange / Time.fixedDeltaTime;
-
+       // Debug.Log("Target Acceleration: " + targetAcceleration);
       return transform.right * magneticMass * targetAcceleration;
     }
 
@@ -187,10 +196,6 @@ public class Repulsor : MonoBehaviour
         {
         steer = wheel.x;
         }
-
-       
-
-        
 
     }
 
