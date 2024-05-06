@@ -77,7 +77,7 @@ public class Repulsor : MonoBehaviour
     void FixedUpdate()
     {
         
-        Vector3 worldVelocity = parentRigidbody.GetPointVelocity(transform.position);
+              Vector3 worldVelocity = parentRigidbody.GetPointVelocity(transform.position);
         float normalizedVelocity = Vector3.Dot(worldVelocity, transform.forward)/maxSpeed ;
 
         if(isSteerable)
@@ -85,7 +85,7 @@ public class Repulsor : MonoBehaviour
         //Debug.Log("Normalized Velocity: " + normalizedVelocity);
             float maxSteerFactor = steeringCurve.Evaluate(normalizedVelocity);
         
-            float targetSteer = (steer * steerLimit) * maxSteerFactor;
+            float targetSteer = steer * steerLimit * maxSteerFactor;
 
             steeringAngle = Mathf.MoveTowardsAngle(steeringAngle, targetSteer, steerSpeed * Time.fixedDeltaTime);
         }
@@ -97,6 +97,8 @@ public class Repulsor : MonoBehaviour
         if(isGrounded){
         parentRigidbody.AddForceAtPosition(calculateMagneticFriction(), transform.position);
         //constantly add rolling friction
+
+        
         parentRigidbody.AddForceAtPosition(-transform.forward * rollingFriction.Evaluate(normalizedVelocity) * rollingFrictionFactor, transform.position);
         }
          if(isThruster && pedal > 0f)
